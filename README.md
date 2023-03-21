@@ -271,7 +271,10 @@ ERR: Could not parse the message
 ```
 
 ```
+$ ./ipkcpc -h localhost -p 2023 -m udp
+INFO: Server socket: 127.0.0.1 : 2023
 (+ (+ (/ 5 5) (* 4 5)) (- 5 4))  
+OK: 22
 ```
 
 ## Notes
