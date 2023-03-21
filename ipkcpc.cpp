@@ -1,32 +1,32 @@
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-
-#else
-#include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#endif
-
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <getopt.h>
+#include <csignal>
+
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 using namespace std;
 
 #define MAX_BUFFER_SIZE 1024
 
+#define EXIT_SUC 0
 #define EXIT_ARG 1
-#define EXIT_NET 2
-#define EXIT_SYS 3
-#define EXIT_COM 4
+#define EXIT_PARCE 2
+#define EXIT_SIGNAL 3
+#define EXIT_TCP_NET 4
+#define EXIT_UDP_NET 5
 
+int client_socket;
+
+/**
+ * Prints usage of the program
+ */
 void printUsage() {
     cout << "Usage: ipkcpc -h <host> -p <port> -m <mode>\n";
     cout << "  -h <host> - server hostname or IP address\n";
@@ -35,10 +35,29 @@ void printUsage() {
     exit(EXIT_ARG);
 }
 
+/**
+ * Function to catch Ctrl-c signal
+ */
+void signalHandler(int) {
+    cout << endl << "BYE" << endl;
+    send(client_socket, "BYE\n", strlen("BYE\n"), 0);
+    close(client_socket);
+    exit(EXIT_SIGNAL);
+}
+
+/**
+ * Parses arguments from command line
+ * @param argc number of arguments
+ * @param argv array of arguments
+ * @param mode protocol mode
+ * @param host server hostname or IP address
+ * @param port server port number
+ */
 void parseArguments(int argc, char** argv, string* mode, string* host, uint16_t* port) {
     if (argc == 1) {
         printUsage();
     }
+
     int opt;
     bool port_set = false;
     while ((opt = getopt(argc, argv, "h:p:m:")) != -1) {
@@ -68,10 +87,14 @@ void parseArguments(int argc, char** argv, string* mode, string* host, uint16_t*
                 break;
             case '?':
                 if (optopt == 'h' || optopt == 'p' || optopt == 'm') {
-                    cerr << "ERROR: option -" << (char) optopt << " requires an argument" << endl;
+                    cerr << "ERROR: Option -" << (char) optopt << " requires an argument" << endl;
+                    printUsage();
+                    break;
                 }
                 else {
-                    cerr << "ERROR: unknown option -" << (char) optopt << endl;
+                    cerr << "ERROR: Unknown option -" << (char) optopt << endl;
+                    printUsage();
+                    break;
                 }
             default:
                 printUsage();
@@ -79,23 +102,28 @@ void parseArguments(int argc, char** argv, string* mode, string* host, uint16_t*
     }
 
     if ((*host).empty() || !port_set || (*mode).empty()) {
-        cerr << "ERROR: missing required argument" << endl;
+        cerr << "ERROR: Missing required argument" << endl;
         printUsage();
     }
 }
 
+/**
+ * TCP client function to connect to server send messages and receive responses
+ * @param host server hostname or IP address
+ * @param port server port number
+ * @param client_socket socket descriptor
+ * @param buffer buffer for sending and receiving messages
+ */
 void tcp(const string& host, const uint16_t& port, int& client_socket, char* buffer) {
-    int bytestx, bytesrx = 0;
-
     struct hostent *server = gethostbyname(host.c_str());
     if (server == nullptr) {
-        cerr << "ERROR: no such host" << endl;
-        exit(EXIT_NET);
+        cerr << "ERROR: No such host" << endl;
+        exit(EXIT_TCP_NET);
     }
 
     if ((client_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        cerr << "Error: could not create socket" << endl;
-        exit(EXIT_FAILURE);
+        cerr << "ERROR: Could not create socket" << endl;
+        exit(EXIT_TCP_NET);
     }
 
     struct sockaddr_in server_address;
@@ -110,52 +138,122 @@ void tcp(const string& host, const uint16_t& port, int& client_socket, char* buf
 
     if (connect(client_socket, (const struct sockaddr *) &server_address, sizeof(server_address)) < 0)
     {
-        cerr << "Error: could not connect to server" << endl;
-        exit(EXIT_NET);
+        cerr << "ERROR: Could not connect to server" << endl;
+        exit(EXIT_TCP_NET);
     }
+
+    signal(SIGINT, signalHandler);
 
     bool hello = false;
 
-    do {
-        bzero(buffer, MAX_BUFFER_SIZE);
-        cin.getline(buffer, MAX_BUFFER_SIZE);
+    while (true) {
+        memset(buffer, 0, MAX_BUFFER_SIZE);
 
-        if (!hello && strcmp(buffer, "HELLO") != 0) {
-            cerr << "ERROR: first message must be HELLO" << endl;
-            exit(EXIT_FAILURE);
+        if (fgets(buffer, MAX_BUFFER_SIZE, stdin) != NULL) {
+        }
+
+        if (!hello && strcmp(buffer, "HELLO\n") != 0) {
+            cerr << "ERROR: First message must be HELLO" << endl;
+            send(client_socket, "BYE\n", strlen("BYE\n"), 0);
+            close(client_socket);
+            exit(EXIT_PARCE);
         } else {
             hello = true;
         }
 
-
-        bytestx = send(client_socket, buffer, strlen(buffer), 0);
+        int bytestx = send(client_socket, buffer, strlen(buffer), 0);
         if (bytestx < 0) {
-            cerr << "Error: could not send data to server" << endl;
-            exit(EXIT_NET);
+            cerr << "ERROR: Could not send data to server" << endl;
+            exit(EXIT_TCP_NET);
         }
 
-        bzero(buffer, MAX_BUFFER_SIZE);
+        memset(buffer, 0, MAX_BUFFER_SIZE);
 
-        bytesrx = recv(client_socket, buffer, MAX_BUFFER_SIZE, 0);
+        int bytesrx = recv(client_socket, buffer, MAX_BUFFER_SIZE, 0);
         if (bytesrx < 0) {
-            cerr << "Error: could not receive data from server" << endl;
-            exit(EXIT_NET);
+            cerr << "ERROR: Could not receive data from server" << endl;
+            exit(EXIT_TCP_NET);
         }
 
         cout << buffer;
 
-    } while (strcmp(buffer, "BYE\n") != 0);
+        if (strcmp(buffer, "BYE\n") == 0) {
+            break;
+        }
+    }
+    close(client_socket);
+    exit(EXIT_SUC);
 }
 
+/**
+ * UDP client function to connect to server send messages and receive responses
+ * @param host server hostname or IP address
+ * @param port server port number
+ * @param client_socket socket descriptor
+ * @param buffer buffer for sending and receiving messages
+ */
 void udp(const string& host, const uint16_t& port, int& client_socket, char* buffer) {
-    //TODO
+    struct hostent *server = gethostbyname(host.c_str());
+    if (server == nullptr) {
+        cerr << "ERROR: No such host" << endl;
+        exit(EXIT_UDP_NET);
+    }
+
+    if ((client_socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        cerr << "ERROR: Could not create socket" << endl;
+        exit(EXIT_UDP_NET);
+    }
+
+    socklen_t serverlen;
+    struct sockaddr_in server_address;
+    memset(&server_address, 0, sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    memcpy(&server_address.sin_addr.s_addr, server->h_addr, server->h_length);
+    server_address.sin_port = htons(port);
+
+    serverlen = sizeof(server_address);
+    char ip_str[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &(server_address.sin_addr), ip_str, INET_ADDRSTRLEN);
+    cout << "INFO: Server socket: " << ip_str << " : " << ntohs(server_address.sin_port) << endl;
+
+    while (true) {
+        string expression;
+        getline(cin, expression);
+
+        const size_t headerSize = 2;
+        string send_DGram(headerSize + expression.length(), '\0');
+        send_DGram[0] = '\0';
+        send_DGram[1] = static_cast<char>(expression.length());
+        copy(expression.begin(), expression.end(), send_DGram.begin() + headerSize);
+
+        int bytestx = sendto(client_socket, send_DGram.c_str(), send_DGram.length(), 0, (struct sockaddr *) &server_address, serverlen);
+        if (bytestx < 0) {
+            cerr << "ERROR: Could not send data to server" << endl;
+            exit(EXIT_UDP_NET);
+        }
+
+        memset(buffer, 0, MAX_BUFFER_SIZE);
+
+        int bytesrx = recvfrom(client_socket, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *) &server_address, &serverlen);
+        if (bytesrx < 0) {
+            cerr << "ERROR: Could not receive data from server" << endl;
+            exit(EXIT_UDP_NET);;
+        }
+
+        int status = buffer[1];
+        string result = &buffer[3];
+        if (status == 0) {
+            cout << "OK: " << result << endl;
+        } else {
+            cerr << "ERR: " << result << endl;
+        }
+    }
 }
 
 int main(int argc, char** argv) {
     uint16_t port;
     string host, mode;
 
-    int client_socket;
     char buffer[MAX_BUFFER_SIZE];
 
     parseArguments(argc, argv, &mode, &host, &port);
@@ -167,5 +265,5 @@ int main(int argc, char** argv) {
     }
 
     close(client_socket);
-    return EXIT_SUCCESS;
+    return EXIT_SUC;
 }
