@@ -1,3 +1,13 @@
+/**
+ * IPK Project 1 – Calculator
+ * @author
+ *   xkalut00, Maksim Kalutski
+ *
+ * @file ipkcpc.cpp
+ * @brief TCP/UDP client for calculator server
+ * @date 21.03.2023
+ */
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
