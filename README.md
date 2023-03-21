@@ -234,13 +234,6 @@ ERROR: First message must be HELLO
 ```
 $ ./ipkcpc -h localhost -p 2023 -m tcp
 INFO: Server socket: 127.0.0.1 : 2023
-AHOJ
-ERROR: First message must be HELLO
-```
-
-```
-$ ./ipkcpc -h localhost -p 2023 -m tcp
-INFO: Server socket: 127.0.0.1 : 2023
 HELLO
 HELLO
 ^C
