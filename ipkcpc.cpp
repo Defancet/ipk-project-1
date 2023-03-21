@@ -1,5 +1,5 @@
 /**
- * IPK Project 1 – Calculator
+ * IPK Project 1 - Calculator
  * @author
  *   xkalut00, Maksim Kalutski
  *
