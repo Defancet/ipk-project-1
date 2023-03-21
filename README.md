@@ -40,7 +40,7 @@ $ ./ipkcpc -h localhost -p 2023 -m udp
 ```
 
 ```console
-$ ./ipkcpc -h merlin.fit.vutbr.cz -p 10002 -m tdp
+$ ./ipkcpc -h merlin.fit.vutbr.cz -p 10002 -m tcp
 ```
 
 
