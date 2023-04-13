@@ -144,7 +144,6 @@ void tcp(const string& host, const uint16_t& port, int& client_socket, char* buf
 
     char ip_str[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &(server_address.sin_addr), ip_str, INET_ADDRSTRLEN);
-    cout << "INFO: Server socket: " << ip_str << " : " << ntohs(server_address.sin_port) << endl;
 
     if (connect(client_socket, (const struct sockaddr *) &server_address, sizeof(server_address)) < 0)
     {
@@ -163,7 +162,6 @@ void tcp(const string& host, const uint16_t& port, int& client_socket, char* buf
         }
 
         if (!hello && strcmp(buffer, "HELLO\n") != 0) {
-            cerr << "ERROR: First message must be HELLO" << endl;
             send(client_socket, "BYE\n", strlen("BYE\n"), 0);
             close(client_socket);
             exit(EXIT_PARCE);
@@ -224,11 +222,15 @@ void udp(const string& host, const uint16_t& port, int& client_socket, char* buf
     serverlen = sizeof(server_address);
     char ip_str[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &(server_address.sin_addr), ip_str, INET_ADDRSTRLEN);
-    cout << "INFO: Server socket: " << ip_str << " : " << ntohs(server_address.sin_port) << endl;
 
     while (true) {
         string expression;
         getline(cin, expression);
+
+        if (expression.empty()) {
+            close(client_socket);
+            exit(EXIT_SIGNAL);
+        }
 
         const size_t headerSize = 2;
         string send_DGram(headerSize + expression.length(), '\0');
@@ -253,9 +255,9 @@ void udp(const string& host, const uint16_t& port, int& client_socket, char* buf
         int status = buffer[1];
         string result = &buffer[3];
         if (status == 0) {
-            cout << "OK: " << result << endl;
+            cout << "OK:" << result << endl;
         } else {
-            cerr << "ERR: " << result << endl;
+            cerr << "ERR:" << result << endl;
         }
     }
 }
@@ -277,3 +279,4 @@ int main(int argc, char** argv) {
     close(client_socket);
     return EXIT_SUC;
 }
+
